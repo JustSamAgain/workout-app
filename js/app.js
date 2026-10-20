@@ -4,6 +4,7 @@ import { openSheet, confirmDialog, promptDialog } from './ui.js';
 import { icon } from './icons.js';
 import { unlockAudio } from './audio.js';
 import { viewPlayer } from './player.js';
+import { buildExport, readImport } from './transfer.js';
 
 const view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
@@ -20,6 +21,7 @@ const routes = [
   [/^#\/exercises$/, viewExercises, 'exercises'],
   [/^#\/exercises\/new$/, viewExerciseForm, null],
   [/^#\/exercises\/([\w-]+)$/, viewExerciseForm, null],
+  [/^#\/share$/, viewShare, 'share'],
 ];
 
 let cleanup = null;
@@ -558,4 +560,149 @@ async function viewExerciseForm(view, match, ctx) {
   return () => {
     if (ownUrl) URL.revokeObjectURL(ownUrl);
   };
+}
+
+// ---------- Share: export & import ----------
+
+function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function countLabel(n, one, many) {
+  return n === 1 ? `1 ${one}` : `${n} ${many}`;
+}
+
+function saveFile(file) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+async function viewShare(view, match, ctx) {
+  view.innerHTML = `
+    <header class="page-head"><h1>Share</h1></header>
+
+    <section class="section" aria-labelledby="exportTitle">
+      <h2 class="section-title" id="exportTitle">Export</h2>
+      <p class="section-text">Put all your exercises and workouts, photos included, into one file. Send it to a friend or keep it as a backup.</p>
+      <p class="row-meta" id="exportInfo">Preparing file…</p>
+      <div class="btn-row" id="exportButtons" hidden>
+        <button class="btn btn-primary" id="shareFile" hidden>${icon.share}Share file</button>
+        <button class="btn btn-secondary" id="saveFile">${icon.download}Save file</button>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="importTitle">
+      <h2 class="section-title" id="importTitle">Import</h2>
+      <p class="section-text">Add exercises and workouts from an exported file. Nothing here gets deleted. Items you already have are only updated when the file has a newer version.</p>
+      <label class="btn btn-secondary" id="importLabel">
+        <input type="file" accept=".json,application/json" id="importInput" class="visually-hidden">
+        ${icon.file}<span id="importLabelText">Choose file</span>
+      </label>
+      <p class="notice" id="importNotice" role="status" hidden></p>
+    </section>`;
+
+  const info = view.querySelector('#exportInfo');
+  const buttons = view.querySelector('#exportButtons');
+  const shareBtn = view.querySelector('#shareFile');
+  const notice = view.querySelector('#importNotice');
+  const importLabel = view.querySelector('#importLabel');
+  const importLabelText = view.querySelector('#importLabelText');
+  let exportFile = null;
+
+  // The file is built up front so "Share" can open the share menu right on the tap.
+  async function prepareExport() {
+    info.textContent = 'Preparing file…';
+    buttons.hidden = true;
+    const result = await buildExport();
+    if (ctx.stale()) return;
+    if (!result.exerciseCount && !result.workoutCount) {
+      exportFile = null;
+      info.textContent = 'Nothing to export yet. Add some exercises first.';
+      return;
+    }
+    exportFile = result.file;
+    info.textContent = `${countLabel(result.exerciseCount, 'exercise', 'exercises')} and ${countLabel(result.workoutCount, 'workout', 'workouts')}, ${formatSize(exportFile.size)}`;
+    shareBtn.hidden = !navigator.canShare?.({ files: [exportFile] });
+    buttons.hidden = false;
+  }
+
+  shareBtn.addEventListener('click', async () => {
+    if (!exportFile) return;
+    try {
+      await navigator.share({ files: [exportFile], title: 'Workouts' });
+    } catch (err) {
+      if (err.name !== 'AbortError') saveFile(exportFile);
+    }
+  });
+  view.querySelector('#saveFile').addEventListener('click', () => exportFile && saveFile(exportFile));
+
+  function showNotice(message, isError = false) {
+    notice.textContent = message;
+    notice.classList.toggle('notice-error', isError);
+    notice.hidden = false;
+  }
+
+  view.querySelector('#importInput').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    notice.hidden = true;
+
+    let plan;
+    try {
+      plan = await readImport(file);
+    } catch (err) {
+      showNotice(err.message, true);
+      return;
+    }
+    const { counts } = plan;
+    const inFile = `${countLabel(counts.exercises, 'exercise', 'exercises')} and ${countLabel(counts.workouts, 'workout', 'workouts')}`;
+
+    if (!plan.hasChanges) {
+      await confirmDialog({
+        title: 'Already up to date',
+        message: `This file has ${inFile}. You already have all of them in the same or a newer version.`,
+        confirm: 'OK',
+        cancel: null,
+      });
+      return;
+    }
+
+    const parts = [];
+    if (counts.new) parts.push(`${counts.new} new`);
+    if (counts.update) parts.push(`${counts.update} updated`);
+    if (counts.same) parts.push(`${counts.same} already up to date`);
+    const ok = await confirmDialog({
+      title: 'Import file?',
+      message: `This file has ${inFile}: ${parts.join(', ')}.`,
+      confirm: 'Import',
+    });
+    if (!ok) return;
+
+    importLabel.classList.add('is-disabled');
+    try {
+      await plan.apply((done, total) => {
+        importLabelText.textContent = `Importing photos ${done} of ${total}…`;
+      });
+      const changed = [];
+      if (counts.new) changed.push(`${counts.new} new`);
+      if (counts.update) changed.push(`${counts.update} updated`);
+      showNotice(`Imported: ${changed.join(', ')}.`);
+      await prepareExport();
+    } catch (err) {
+      showNotice(`Import failed: ${err.message}`, true);
+    } finally {
+      importLabel.classList.remove('is-disabled');
+      importLabelText.textContent = 'Choose file';
+    }
+  });
+
+  await prepareExport();
 }

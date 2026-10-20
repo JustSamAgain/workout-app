@@ -133,4 +133,21 @@ export const repo = {
   deleteWorkout(id) {
     return run('workouts', 'readwrite', (s) => s.delete(id));
   },
+
+  // Writes records exactly as given (keeping their ids and timestamps), in one transaction.
+  // Used by import.
+  async putRecords({ exercises = [], workouts = [] }) {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(['exercises', 'workouts'], 'readwrite');
+      const exStore = tx.objectStore('exercises');
+      const wStore = tx.objectStore('workouts');
+      exercises.forEach((e) => exStore.put(e));
+      workouts.forEach((w) => wStore.put(w));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    requestPersistence();
+  },
 };

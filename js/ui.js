@@ -33,7 +33,7 @@ export async function confirmDialog({ title, message = '', confirm = 'OK', cance
       ${message ? `<p class="sheet-text">${esc(message)}</p>` : ''}
       <div class="sheet-actions">
         <span class="spacer"></span>
-        <button type="button" class="btn btn-secondary" data-cancel>${esc(cancel)}</button>
+        ${cancel ? `<button type="button" class="btn btn-secondary" data-cancel>${esc(cancel)}</button>` : ''}
         <button type="submit" class="btn ${danger ? 'btn-danger-solid' : 'btn-primary'}">${esc(confirm)}</button>
       </div>
     </form>`,
@@ -42,7 +42,7 @@ export async function confirmDialog({ title, message = '', confirm = 'OK', cance
         e.preventDefault();
         done(true);
       });
-      dlg.querySelector('[data-cancel]').addEventListener('click', () => done(false));
+      dlg.querySelector('[data-cancel]')?.addEventListener('click', () => done(false));
     }
   );
   return result === true;

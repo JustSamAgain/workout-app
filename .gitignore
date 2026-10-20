@@ -1,4 +1,4 @@
-# OS
+# Operating system
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -13,10 +13,12 @@ desktop.ini
 *.log
 npm-debug.log*
 
+# Later: Node / Capacitor / native builds
 node_modules/
 dist/
 android/
 ios/
 
+# Secrets (e.g. server credentials)
 .env
 .env.*

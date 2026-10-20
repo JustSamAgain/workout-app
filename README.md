@@ -8,6 +8,7 @@ A small installable web app (PWA) to build workouts from your own exercises and 
   - exercise for a number of reps (e.g. Squats, 15 reps)
   - rest of any length
 - **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**.
+- **Share**: export everything (photos included) into one file and import files from friends.
 - Works offline. All data stays on the device.
 
 No build step, no dependencies. Plain HTML, CSS and JavaScript.
@@ -47,6 +48,16 @@ Important on iPhone: the home-screen app has its own storage, separate from Safa
 - **Data lives on one device** (in the browser's IndexedDB). Deleting the app or clearing website data deletes your exercises and workouts.
 - If you switch to another app during a workout, the running step keeps counting. When you come back, the next step starts from that moment.
 
+## Sharing and backups
+
+On the **Share** tab:
+
+- **Export** puts all exercises and workouts, with photos, into one `.json` file. On phones, **Share file** opens the share menu (WhatsApp, Mail, Files …). **Save file** downloads it.
+- **Import** adds the contents of such a file. Nothing is ever deleted. Exercises and workouts that already exist (same id) are only replaced when the file has a newer version, so importing the same file twice is safe.
+- Two different exercises with the same name (e.g. your "Push-ups" and a friend's "Push-ups") stay separate.
+
+Exporting regularly is also the only backup, since the data lives on one device.
+
 ## Updating the app
 
 After changing any file, open `sw.js` and raise `VERSION` (e.g. `'v1'` → `'v2'`), then upload the changed files again. Phones load the new version the next time the app is opened (sometimes it takes a second restart of the app).
@@ -60,6 +71,7 @@ sw.js                 offline support (caches all app files)
 css/app.css           all styles, light and dark mode
 js/app.js             router, workout list, workout editor, exercise library
 js/player.js          workout mode (timer, steps, wake lock)
+js/transfer.js        export and import (file format, checks, merging)
 js/db.js              storage layer, the only file that touches the database
 js/audio.js           beeps (Web Audio API)
 js/ui.js              bottom sheets and confirm dialogs
@@ -79,6 +91,20 @@ Step      { id, type: 'time', exerciseId, seconds }
 ```
 
 IDs are UUIDs, so records can later be merged with server data without collisions.
+
+### Export file
+
+```
+{
+  "format": "workout-timer",
+  "version": 1,
+  "exportedAt": "2026-10-20T18:00:00.000Z",
+  "exercises": [ { ...exercise, "image": "data:image/jpeg;base64,..." } ],
+  "workouts":  [ ...workouts ]
+}
+```
+
+Photos are embedded as base64, so one file contains everything. Imported photos are re-encoded, and invalid steps or entries are skipped.
 
 ## Extending later
 
