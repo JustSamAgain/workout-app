@@ -5,7 +5,7 @@
 // if the phone stutters. The next step starts exactly at the previous endTime.
 
 import { repo } from './db.js';
-import { esc, formatClock, stepTarget, exerciseImageUrl, thumb, expandSteps } from './utils.js';
+import { esc, formatClock, baseTarget, stepExtras, formatWeight, exerciseImageUrl, thumb, expandSteps, isTaskPlay } from './utils.js';
 import { sounds, unlockAudio, isAudioUnlocked } from './audio.js';
 import { confirmDialog } from './ui.js';
 import { icon } from './icons.js';
@@ -19,10 +19,12 @@ export async function viewPlayer(view, match, ctx) {
 
   const exById = new Map(exercises.map((e) => [e.id, e]));
   // Repeat blocks are unrolled here, so the player just walks through a flat list.
-  const plays = workout ? expandSteps(workout.steps, new Set(exById.keys())) : [];
+  // "Each side" steps become left, switch, right.
+  const plays = workout ? expandSteps(workout.steps, exById) : [];
   const steps = plays.map((p) => p.step);
   const rounds = plays.map((p) => p.round); // { n, of } inside a repeat block, else null
-  const taskTotal = steps.filter((s) => s.type !== 'rest').length;
+  const sides = plays.map((p) => p.side); // 'left' | 'right' | null
+  const taskTotal = plays.filter(isTaskPlay).length; // both sides of an exercise count once
 
   if (!workout || !taskTotal) {
     view.innerHTML = `<div class="empty"><p class="empty-title">Nothing to start</p>
@@ -31,12 +33,14 @@ export async function viewPlayer(view, match, ctx) {
     return;
   }
 
-  // tasksBefore[i] = number of exercises before step i
+  // tasksBefore[i] = number of exercises finished before step i
   const tasksBefore = [];
-  steps.reduce((n, s, i) => {
+  plays.reduce((n, p, i) => {
     tasksBefore[i] = n;
-    return n + (s.type === 'rest' ? 0 : 1);
+    const finishesTask = p.step.type !== 'rest' && p.step.type !== 'switch' && p.side !== 'left';
+    return n + (finishesTask ? 1 : 0);
   }, 0);
+  const isPause = (s) => s.type === 'rest' || s.type === 'switch';
 
   document.body.classList.add('playing');
   const root = document.createElement('div');
@@ -59,7 +63,7 @@ export async function viewPlayer(view, match, ctx) {
 
   const current = () => (index < 0 ? { type: 'ready', seconds: READY_SECONDS } : steps[index]);
   const nextTaskFrom = (from) => {
-    for (let i = Math.max(0, from); i < steps.length; i++) if (steps[i].type !== 'rest') return i;
+    for (let i = Math.max(0, from); i < steps.length; i++) if (!isPause(steps[i])) return i;
     return -1;
   };
   const roundLabel = (r) => (r ? `Round ${r.n} of ${r.of}` : '');
@@ -115,7 +119,7 @@ export async function viewPlayer(view, match, ctx) {
       durationMs = step.seconds * 1000;
       endTime = start + durationMs;
     }
-    if (step.type === 'rest') sounds.rest();
+    if (isPause(step)) sounds.rest();
     else sounds.work();
     draw();
     tick();
@@ -206,17 +210,24 @@ export async function viewPlayer(view, match, ctx) {
     el.animate([{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
   }
 
+  const sideLabel = (side) => (side === 'left' ? 'Left side' : side === 'right' ? 'Right side' : '');
+
   function nextCard(i) {
     const step = steps[i];
     const ex = exById.get(step.exerciseId);
-    const label = rounds[i] ? `Next, round ${rounds[i].n} of ${rounds[i].of}` : 'Next';
+    const parts = ['Next'];
+    if (rounds[i]) parts.push(`round ${rounds[i].n} of ${rounds[i].of}`);
+    if (sides[i]) parts.push(`${sides[i]} side`);
+    // The side is in the label, so "each side" is left out here.
+    const extras = stepExtras(step, ex, { sides: !sides[i] });
     return `<div class="p-next">
-      <p class="p-next-label">${label}</p>
+      <p class="p-next-label">${parts.join(', ')}</p>
       <div class="p-next-row">
         ${thumb(ex, 'md')}
         <span>
           <span class="p-next-name">${esc(ex.name)}</span>
-          <span class="p-next-target">${stepTarget(step)}</span>
+          <span class="p-next-target">${baseTarget(step)}</span>
+          ${extras.length ? `<span class="p-next-extras">${esc(extras.join(', '))}</span>` : ''}
         </span>
       </div>
     </div>`;
@@ -251,11 +262,11 @@ export async function viewPlayer(view, match, ctx) {
     }
 
     const step = current();
-    const phase = step.type === 'ready' ? 'ready' : step.type === 'rest' ? 'rest' : 'work';
+    const phase = step.type === 'ready' ? 'ready' : step.type === 'rest' ? 'rest' : step.type === 'switch' ? 'switch' : 'work';
     root.className = `player phase-${phase}${paused ? ' is-paused' : ''}`;
 
     const segs = steps
-      .map((s, i) => `<span class="pseg${s.type === 'rest' ? ' pseg-rest' : ''}${i < index ? ' is-done' : ''}${i === index ? ' is-current' : ''}"><i></i></span>`)
+      .map((s, i) => `<span class="pseg${isPause(s) ? ' pseg-rest' : ''}${i < index ? ' is-done' : ''}${i === index ? ' is-current' : ''}"><i></i></span>`)
       .join('');
 
     const doneCount = index < 0 ? 0 : tasksBefore[index];
@@ -267,16 +278,20 @@ export async function viewPlayer(view, match, ctx) {
       const url = exerciseImageUrl(ex);
       main = `
         ${url ? `<img class="p-image" src="${url}" alt="">` : ''}
-        ${rounds[index] ? `<p class="p-round">${roundLabel(rounds[index])}</p>` : ''}
+        ${rounds[index] || sides[index] ? `<div class="p-badges">
+            ${rounds[index] ? `<p class="p-round">${roundLabel(rounds[index])}</p>` : ''}
+            ${sides[index] ? `<p class="p-side">${sideLabel(sides[index])}</p>` : ''}
+          </div>` : ''}
         <h1 class="p-name">${esc(ex.name)}</h1>
         ${step.type === 'reps'
           ? `<div class="p-clock p-reps">${step.reps}<span>reps</span></div>`
           : '<div class="p-clock" id="clock"></div>'}
+        ${step.weight ? `<p class="p-weight">${formatWeight(step.weight)}</p>` : ''}
         ${ex.description ? `<p class="p-desc" data-act="desc">${esc(ex.description)}</p>` : ''}`;
     } else {
       const next = nextTaskFrom(index + 1);
       main = `
-        <p class="p-phase">${phase === 'ready' ? 'Get ready' : 'Rest'}</p>
+        <p class="p-phase">${phase === 'ready' ? 'Get ready' : phase === 'switch' ? 'Switch sides' : 'Rest'}</p>
         <div class="p-clock" id="clock"></div>
         ${next >= 0 ? nextCard(next) : '<p class="p-next-label">Last rest, then you are done</p>'}`;
     }

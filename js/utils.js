@@ -26,8 +26,41 @@ export function formatClock(totalSeconds) {
   return `${m}:${s}`;
 }
 
-export function stepTarget(step) {
+export const SWITCH_SECONDS = 5;
+export const MAX_WEIGHT = 500;
+
+// "Each side" only applies when the exercise itself is marked as one side at a time.
+export const isEachSide = (step, exercise) => !!(step.sides && exercise?.oneSided);
+
+export const formatWeight = (kg) => `${kg} kg`;
+
+// "12 reps" or "45 s", without extras.
+export function baseTarget(step) {
   return step.type === 'reps' ? `${step.reps} reps` : formatDuration(step.seconds);
+}
+
+// Extras shown next to the target: ["each side", "20 kg"].
+export function stepExtras(step, exercise, { sides = true } = {}) {
+  const out = [];
+  if (sides && isEachSide(step, exercise)) out.push('each side');
+  if (step.weight) out.push(formatWeight(step.weight));
+  return out;
+}
+
+export function stepTarget(step, exercise) {
+  return [baseTarget(step), ...stepExtras(step, exercise)].join(', ');
+}
+
+// Reads a weight typed by the user ("12,5" or "12.5"). Empty means no weight.
+export function parseWeight(text) {
+  const t = String(text ?? '').trim().replace(',', '.');
+  if (!t) return { value: null };
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_WEIGHT) {
+    return { error: `Enter a weight between 0.5 and ${MAX_WEIGHT} kg, or leave it empty.` };
+  }
+  if (!Number.isInteger(n * 2)) return { error: 'Use steps of 0.5 kg, for example 12.5.' };
+  return { value: n };
 }
 
 // All exercise and rest steps of a workout, including those inside repeat blocks (not unrolled).
@@ -35,14 +68,28 @@ export function allSteps(steps) {
   return steps.flatMap((s) => (s.type === 'repeat' ? s.steps : [s]));
 }
 
-// The exact sequence the player runs. Repeat blocks are unrolled; in the last round,
-// rests at the end of the block are skipped. Steps whose exercise was deleted are left out.
-export function expandSteps(steps, exerciseIds) {
-  const usable = (s) => s.type === 'rest' || exerciseIds.has(s.exerciseId);
+// The exact sequence the player runs, as { step, round, side }.
+// - Repeat blocks are unrolled; in the last round, rests at the end of the block are skipped.
+// - "Each side" steps become left, a short switch (time steps only), then right.
+// - Steps whose exercise was deleted are left out.
+// `exById` is a Map of exercise id -> exercise.
+export function expandSteps(steps, exById) {
+  const usable = (s) => s.type === 'rest' || exById.has(s.exerciseId);
   const out = [];
+  const emit = (s, round) => {
+    if (s.type === 'rest' || !isEachSide(s, exById.get(s.exerciseId))) {
+      out.push({ step: s, round, side: null });
+      return;
+    }
+    out.push({ step: s, round, side: 'left' });
+    if (s.type === 'time') {
+      out.push({ step: { type: 'switch', seconds: SWITCH_SECONDS, exerciseId: s.exerciseId }, round, side: null });
+    }
+    out.push({ step: s, round, side: 'right' });
+  };
   for (const s of steps) {
     if (s.type !== 'repeat') {
-      if (usable(s)) out.push({ step: s, round: null });
+      if (usable(s)) emit(s, null);
       continue;
     }
     const kids = s.steps.filter(usable);
@@ -53,24 +100,25 @@ export function expandSteps(steps, exerciseIds) {
     if (lastTask < 0) continue; // a block without exercises does nothing
     for (let n = 1; n <= s.rounds; n++) {
       const list = n === s.rounds ? kids.slice(0, lastTask + 1) : kids;
-      for (const k of list) out.push({ step: k, round: { n, of: s.rounds } });
+      for (const k of list) emit(k, { n, of: s.rounds });
     }
   }
   return out;
 }
 
-export function workoutStats(workout, exerciseIds) {
+// An exercise done on both sides counts once.
+export const isTaskPlay = (p) => p.step.type !== 'rest' && p.step.type !== 'switch' && p.side !== 'right';
+
+export function workoutStats(workout, exById) {
   let tasks = 0;
   let seconds = 0;
   let repTasks = 0;
-  for (const { step: s } of expandSteps(workout.steps, exerciseIds)) {
-    if (s.type === 'rest') {
-      seconds += s.seconds;
-      continue;
-    }
+  for (const p of expandSteps(workout.steps, exById)) {
+    const s = p.step;
+    if (s.type === 'time' || s.type === 'rest' || s.type === 'switch') seconds += s.seconds;
+    if (!isTaskPlay(p)) continue;
     tasks++;
-    if (s.type === 'time') seconds += s.seconds;
-    else repTasks++;
+    if (s.type === 'reps') repTasks++;
   }
   let summary;
   if (!tasks) summary = 'No exercises yet';
@@ -83,7 +131,7 @@ export function workoutStats(workout, exerciseIds) {
 }
 
 // Lowercase without accents, so "uebung", "Übung" and "ubung" behave sensibly.
-const searchKey = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const searchKey = (s) => String(s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 // True when every word of the query appears somewhere in the name ("push up" finds "Push-ups").
 export function matchesSearch(name, query) {
@@ -106,7 +154,7 @@ export function formatSize(bytes) {
 export function slug(name) {
   const s = String(name)
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

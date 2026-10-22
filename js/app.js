@@ -77,11 +77,11 @@ route();
 async function viewWorkouts(view, match, ctx) {
   const [workouts, exercises] = await Promise.all([repo.listWorkouts(), repo.listExercises()]);
   if (ctx.stale()) return;
-  const exerciseIds = new Set(exercises.map((e) => e.id));
+  const exById = new Map(exercises.map((e) => [e.id, e]));
 
   const list = workouts
     .map((w) => {
-      const st = workoutStats(w, exerciseIds);
+      const st = workoutStats(w, exById);
       return `<li class="row">
         <a class="row-main" href="#/workouts/${w.id}">
           <span class="row-title">${esc(w.name)}</span>

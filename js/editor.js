@@ -1,5 +1,5 @@
 import { repo, newId } from './db.js';
-import { esc, formatDuration, stepTarget, workoutStats, allSteps, thumb, matchesSearch } from './utils.js';
+import { esc, formatDuration, baseTarget, stepExtras, workoutStats, allSteps, thumb, matchesSearch, parseWeight, isEachSide } from './utils.js';
 import { openSheet, confirmDialog, promptDialog, stepper, wireStepper, searchField, wireSearch } from './ui.js';
 import { icon } from './icons.js';
 import { nav } from './state.js';
@@ -105,7 +105,8 @@ export async function viewWorkoutEditor(view, match, ctx) {
         ${thumb(ex, 'sm')}
         <span class="step-text">
           <span class="step-name">${esc(ex?.name ?? 'Missing exercise')}</span>
-          <span class="step-target">${stepTarget(step)}</span>
+          <span class="step-target">${baseTarget(step)}</span>
+          ${stepExtras(step, ex).length ? `<span class="step-extras">${esc(stepExtras(step, ex).join(', '))}</span>` : ''}
         </span>
       </button>
       ${move}
@@ -113,7 +114,7 @@ export async function viewWorkoutEditor(view, match, ctx) {
   }
 
   function draw(focus = null) {
-    const st = workoutStats(workout, new Set(exById.keys()));
+    const st = workoutStats(workout, exById);
     let n = 0;
     const last = top.length - 1;
     const rows = top
@@ -319,7 +320,9 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
   const seconds = step?.type === 'time' ? step.seconds : defaults.seconds;
   const reps = step?.type === 'reps' ? step.reps : defaults.reps;
   const selected = step?.exerciseId ?? null;
+  const weight = step?.weight ?? '';
   const tags = usedTags(exercises);
+  const exMap = new Map(exercises.map((e) => [e.id, e]));
   const filter = new Set();
 
   const picker = exercises.length
@@ -346,6 +349,20 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
       </div>
       <div class="mode-time">${durationFields(seconds)}</div>
       <div class="mode-reps">${stepper('reps', reps, 1, 9999, 'reps')}</div>
+      <label class="switch-row switch-row-sheet" data-sides-row hidden>
+        <span class="switch-text">
+          <span class="switch-title">Each side</span>
+          <span class="row-meta">The time or reps count for each side. Left first, then right.</span>
+        </span>
+        <input type="checkbox" class="switch" name="sides" ${!step || step.sides ? 'checked' : ''}>
+      </label>
+      <div class="weight-field">
+        <label class="field-label" for="weightInput">Weight <span class="optional">optional</span></label>
+        <div class="weight-input">
+          <input id="weightInput" name="weight" type="text" inputmode="decimal" autocomplete="off" placeholder="None" value="${esc(weight)}">
+          <span>kg</span>
+        </div>
+      </div>
       <p class="form-error" hidden></p>
       ${sheetActions(isNew)}
     </form>`,
@@ -376,9 +393,22 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
         });
       }
 
+      // "Each side" is only offered for exercises marked as one side at a time.
+      const sidesRow = form.querySelector('[data-sides-row]');
+      const sidesBox = form.elements.sides;
+      let sidesTouched = false;
+      sidesBox.addEventListener('change', () => { sidesTouched = true; });
+      const updateSides = (exerciseId, initial = false) => {
+        const oneSided = !!exMap.get(exerciseId)?.oneSided;
+        sidesRow.hidden = !oneSided;
+        if (oneSided && !initial && !sidesTouched) sidesBox.checked = true;
+      };
+      updateSides(selected, true);
+
       form.querySelectorAll('input[name="exercise"]').forEach((r) =>
         r.addEventListener('change', () => {
           form.querySelectorAll('.pick').forEach((p) => p.classList.toggle('is-selected', p.contains(r) && r.checked));
+          updateSides(r.value);
         })
       );
       form.querySelectorAll('input[name="mode"]').forEach((r) =>
@@ -395,14 +425,22 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
         e.preventDefault();
         const exerciseId = form.querySelector('input[name="exercise"]:checked')?.value;
         if (!exerciseId) return showError(form, 'Choose an exercise.');
+        const w = parseWeight(form.elements.weight.value);
+        if (w.error) {
+          form.elements.weight.focus();
+          return showError(form, w.error);
+        }
+        const extras = {};
+        if (w.value) extras.weight = w.value;
+        if (exMap.get(exerciseId)?.oneSided && sidesBox.checked) extras.sides = true;
         if (form.dataset.mode === 'time') {
           const secs = readSeconds();
           if (secs < 1) return showError(form, 'Set a time of at least 1 second.');
-          done({ action: 'save', step: { type: 'time', exerciseId, seconds: secs } });
+          done({ action: 'save', step: { type: 'time', exerciseId, seconds: secs, ...extras } });
         } else {
           const r = readReps();
           if (!(r >= 1)) return showError(form, 'Set at least 1 rep.');
-          done({ action: 'save', step: { type: 'reps', exerciseId, reps: r } });
+          done({ action: 'save', step: { type: 'reps', exerciseId, reps: r, ...extras } });
         }
       });
     }

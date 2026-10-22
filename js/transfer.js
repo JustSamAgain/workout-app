@@ -1,25 +1,26 @@
 // Export and import of exercises and workouts as one JSON file.
 //
-// File format (version 2):
+// File format (version 3):
 // {
 //   "format": "workout-timer",
-//   "version": 2,
+//   "version": 3,
 //   "exportedAt": "2026-10-21T18:00:00.000Z",
-//   "exercises": [{ id, name, description, tags: [], image: "data:image/jpeg;base64,..." | null, createdAt, updatedAt }],
+//   "exercises": [{ id, name, description, tags: [], oneSided, image: "data:image/jpeg;base64,..." | null, createdAt, updatedAt }],
 //   "workouts":  [{ id, name, steps: [...], createdAt, updatedAt }]
 // }
 // Version 2 added exercise tags and repeat blocks ({ type: 'repeat', rounds, steps }).
-// Version 1 files can still be imported.
+// Version 3 added oneSided on exercises and weight (kg) and sides (each side) on steps.
+// Older files can still be imported.
 //
 // Import merges: nothing is deleted. Records with an id that already exists are only
 // replaced when the file has a newer version (updatedAt).
 
 import { repo, newId } from './db.js';
-import { resizeImage, slug } from './utils.js';
+import { resizeImage, slug, MAX_WEIGHT } from './utils.js';
 import { normalizeTags, availableTags } from './tags.js';
 
 export const FORMAT = 'workout-timer';
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const MAX_SECONDS = 24 * 60 * 60;
@@ -71,6 +72,7 @@ export async function buildExport(selection = null) {
         name: e.name,
         description: e.description ?? '',
         tags: e.tags ?? [],
+        oneSided: !!e.oneSided,
         image: e.image ? await blobToDataUrl(e.image) : null,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
@@ -153,6 +155,7 @@ export async function readImport(file) {
       name,
       description: text(raw.description, 5000),
       tags: normalizeTags(raw.tags, knownTags),
+      oneSided: raw.oneSided === true,
       imageData: typeof raw.image === 'string' ? raw.image : null,
       createdAt: timestamp(raw.createdAt),
       updatedAt: timestamp(raw.updatedAt),
@@ -177,12 +180,16 @@ export async function readImport(file) {
       } else if (s.type === 'time' || s.type === 'reps') {
         const exerciseId = resolveExercise(s.exerciseId);
         if (!exerciseId) continue;
+        const extras = {};
+        const weight = Number(s.weight);
+        if (Number.isFinite(weight) && weight > 0 && weight <= MAX_WEIGHT && Number.isInteger(weight * 2)) extras.weight = weight;
+        if (s.sides === true) extras.sides = true;
         if (s.type === 'time') {
           const seconds = whole(s.seconds, 1, MAX_SECONDS);
-          if (seconds) steps.push({ id, type: 'time', exerciseId, seconds });
+          if (seconds) steps.push({ id, type: 'time', exerciseId, seconds, ...extras });
         } else {
           const reps = whole(s.reps, 1, MAX_REPS);
-          if (reps) steps.push({ id, type: 'reps', exerciseId, reps });
+          if (reps) steps.push({ id, type: 'reps', exerciseId, reps, ...extras });
         }
       } else if (s.type === 'repeat' && allowRepeat) {
         const rounds = whole(s.rounds, 1, MAX_ROUNDS);

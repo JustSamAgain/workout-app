@@ -143,6 +143,13 @@ export async function viewExerciseForm(view, match, ctx) {
         <span class="field-label" id="tagsLabel">Tags</span>
         <div class="chip-wrap" role="group" aria-labelledby="tagsLabel" id="tagPicker"></div>
       </div>
+      <label class="switch-row">
+        <span class="switch-text">
+          <span class="switch-title">One side at a time</span>
+          <span class="row-meta">For exercises like lunges or side planks. Workouts can then run it for the left and the right side.</span>
+        </span>
+        <input type="checkbox" class="switch" name="oneSided" ${existing?.oneSided ? 'checked' : ''}>
+      </label>
       <label class="field">
         <span class="field-label">Description</span>
         <textarea name="description" rows="5" placeholder="How to do it and what to watch out for">${esc(existing?.description ?? '')}</textarea>
@@ -222,6 +229,7 @@ export async function viewExerciseForm(view, match, ctx) {
       name,
       description: form.elements.description.value.trim(),
       tags: offered.filter((t) => chosen.has(t)),
+      oneSided: form.elements.oneSided.checked,
       image,
     });
     const target = nav.returnTo || '#/exercises';

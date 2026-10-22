@@ -216,7 +216,7 @@ export async function viewShareSelect(view, match, ctx) {
             ${checkBox}
             <span class="ex-text">
               <span class="row-title">${esc(w.name)}</span>
-              <span class="row-meta">${esc(workoutStats(w, exerciseIds).summary)}</span>
+              <span class="row-meta">${esc(workoutStats(w, exById).summary)}</span>
             </span>
           </label>
         </li>`).join('')}</ul>

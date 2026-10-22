@@ -6,6 +6,7 @@ A small installable web app (PWA) to build workouts from your own exercises and 
 - **Workouts**: as many as you like, each an ordered list of steps
   - exercise for a time (e.g. Plank, 45 s)
   - exercise for a number of reps (e.g. Squats, 15 reps)
+  - optionally with a weight (e.g. 20 kg) and, for one-sided exercises, each side (left, then right)
   - rest of any length
   - repeat block: a group of exercises and rests done several rounds in a row
 - **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**. Shows the round inside repeat blocks.
@@ -52,6 +53,17 @@ Important on iPhone: the home-screen app has its own storage, separate from Safa
 ## Tags
 
 Each exercise can have tags: the built-in muscle groups (Chest, Back, Shoulders, Biceps, Triceps, Core, Glutes, Quads, Hamstrings, Calves, Full body, Cardio) and your own (**+ Own tag**). Tap tags above the exercise list, or in the "Add exercise" sheet of a workout, to filter. With several tags selected, only exercises that have **all** of them are shown. Only tags that some exercise uses appear in the filter.
+
+## Weights and sides
+
+**Weight** is set per exercise in a workout ("Add exercise" sheet, field *Weight*, optional). Only kg, in steps of 0.5; "12,5" and "12.5" both work. New steps never take over the weight of the previous one. The workout mode shows the weight under the time or reps.
+
+**Each side**: first mark an exercise as **One side at a time** (e.g. lunges, side plank). Only then does the "Add exercise" sheet show the **Each side** switch for it, turned on by default. The time or reps then count per side:
+
+- time: left side, a 5-second "Switch sides" pause, right side
+- reps: left side with Done, then right side with Done (no pause, you tap when ready)
+
+Both sides count as one exercise in the progress and the summary; the time estimate includes both sides and the switch. Turning off "One side at a time" on an exercise turns off each side in every workout that uses it.
 
 ## Search
 
@@ -110,10 +122,10 @@ icons/, fonts/        app icons and bundled fonts
 ### Data model
 
 ```
-Exercise  { id, name, description, tags[], image (Blob), createdAt, updatedAt }
+Exercise  { id, name, description, tags[], oneSided, image (Blob), createdAt, updatedAt }
 Workout   { id, name, steps[], createdAt, updatedAt }
-Step      { id, type: 'time', exerciseId, seconds }
-        | { id, type: 'reps', exerciseId, reps }
+Step      { id, type: 'time', exerciseId, seconds, weight?, sides? }
+        | { id, type: 'reps', exerciseId, reps, weight?, sides? }
         | { id, type: 'rest', seconds }
         | { id, type: 'repeat', rounds, steps[] }    one level only, no repeat inside a repeat
 ```
@@ -125,7 +137,7 @@ IDs are UUIDs, so records can later be merged with server data without collision
 ```
 {
   "format": "workout-timer",
-  "version": 2,
+  "version": 3,
   "exportedAt": "2026-10-21T18:00:00.000Z",
   "exercises": [ { ...exercise, "image": "data:image/jpeg;base64,..." } ],
   "workouts":  [ ...workouts ]
@@ -134,7 +146,7 @@ IDs are UUIDs, so records can later be merged with server data without collision
 
 Photos are embedded as base64, so one file contains everything. Imported photos are re-encoded, and invalid steps or entries are skipped.
 
-Version 2 added tags and repeat blocks. Version 1 files still import. An older app refuses version 2 files with a message to update the app.
+Version 2 added tags and repeat blocks, version 3 weights and sides. Older files still import. An older app refuses newer files with a message to update the app.
 
 ## Extending later
 

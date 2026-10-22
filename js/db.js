@@ -73,10 +73,11 @@ const withoutExercise = (steps, id) =>
 /*
   Data model
 
-  Exercise: { id, name, description, tags: string[], image: Blob | null, createdAt, updatedAt }
+  Exercise: { id, name, description, tags: string[], oneSided: boolean, image: Blob | null, createdAt, updatedAt }
   Workout:  { id, name, steps: Step[], createdAt, updatedAt }
-  Step:     { id, type: 'time', exerciseId, seconds }
-          | { id, type: 'reps', exerciseId, reps }
+  Step:     { id, type: 'time', exerciseId, seconds, weight?, sides? }
+          | { id, type: 'reps', exerciseId, reps, weight?, sides? }
+            weight: kg in steps of 0.5; sides: true = each side (only if the exercise is oneSided)
           | { id, type: 'rest', seconds }
           | { id, type: 'repeat', rounds, steps: Step[] }   (one level only, no repeat inside repeat)
 */
