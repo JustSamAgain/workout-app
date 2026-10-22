@@ -1,16 +1,19 @@
 import { repo, newId } from './db.js';
-import { esc, formatDuration, stepTarget, workoutStats, allSteps, thumb } from './utils.js';
-import { openSheet, confirmDialog, stepper, wireStepper } from './ui.js';
+import { esc, formatDuration, stepTarget, workoutStats, allSteps, thumb, matchesSearch } from './utils.js';
+import { openSheet, confirmDialog, promptDialog, stepper, wireStepper, searchField, wireSearch } from './ui.js';
 import { icon } from './icons.js';
 import { nav } from './state.js';
 import { usedTags, hasAllTags, filterChips, wireChips } from './tags.js';
 import { shareItemSheet, shareButton } from './share.js';
-import { showError } from './exercises.js';
+import { showError, noMatchText } from './exercises.js';
 
 const MAX_ROUNDS = 99;
 
 // A step is addressed by its position: [i] at the top level, [i, j] inside the repeat block at i.
 const parsePath = (s) => s.split('.').map(Number);
+
+const cloneSteps = (steps) =>
+  steps.map((s) => (s.type === 'repeat' ? { ...s, id: newId(), steps: cloneSteps(s.steps) } : { ...s, id: newId() }));
 
 export async function viewWorkoutEditor(view, match, ctx) {
   const id = match[1];
@@ -148,7 +151,10 @@ export async function viewWorkoutEditor(view, match, ctx) {
         <button class="btn btn-secondary" id="addRest">${icon.plus}Rest</button>
         <button class="btn btn-secondary" id="addRepeat">${icon.plus}Repeat</button>
       </div>
-      <button class="btn-text btn-danger" id="deleteWorkout">Delete workout</button>
+      <div class="editor-extra">
+        <button class="btn-text" id="duplicateWorkout">${icon.copy}Duplicate workout</button>
+        <button class="btn-text btn-danger" id="deleteWorkout">Delete workout</button>
+      </div>
       <div class="dock">
         <a class="btn btn-primary btn-block btn-lg${st.tasks ? '' : ' is-disabled'}" ${st.tasks ? `href="#/workouts/${workout.id}/play" data-start` : 'aria-disabled="true"'}>${icon.play}Start workout</a>
       </div>`;
@@ -244,6 +250,22 @@ export async function viewWorkoutEditor(view, match, ctx) {
       shareItemSheet({ name: workout.name, workoutIds: [workout.id] })
     );
 
+    view.querySelector('#duplicateWorkout').addEventListener('click', async () => {
+      const name = await promptDialog({
+        title: 'Duplicate workout',
+        label: 'Name of the copy',
+        value: `${workout.name} (copy)`.slice(0, 60),
+        confirm: 'Duplicate',
+      });
+      if (name == null) return;
+      // New ids everywhere, so the copy is a separate workout (also when shared or imported).
+      const copy = await repo.saveWorkout({
+        name: name.trim() || `${workout.name} (copy)`,
+        steps: cloneSteps(workout.steps),
+      });
+      location.hash = `#/workouts/${copy.id}`;
+    });
+
     view.querySelector('#deleteWorkout').addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: 'Delete workout?',
@@ -301,13 +323,14 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
   const filter = new Set();
 
   const picker = exercises.length
-    ? `${tags.length ? `<div class="chip-scroll chip-scroll-sheet" role="group" aria-label="Filter by tag">${filterChips(tags, filter)}</div>` : ''}
+    ? `${searchField('')}
+      ${tags.length ? `<div class="chip-scroll chip-scroll-sheet" role="group" aria-label="Filter by tag">${filterChips(tags, filter)}</div>` : ''}
       <div class="pick-list" role="radiogroup" aria-label="Exercise">
         ${exercises.map((e) => `<label class="pick${e.id === selected ? ' is-selected' : ''}" data-ex="${e.id}">
             <input type="radio" name="exercise" value="${e.id}" ${e.id === selected ? 'checked' : ''}>
             ${thumb(e, 'sm')}<span class="pick-text"><span>${esc(e.name)}</span>${e.tags?.length ? `<span class="row-tags">${esc(e.tags.join(', '))}</span>` : ''}</span>
           </label>`).join('')}
-        <p class="pick-empty" hidden>No exercise has all of these tags.</p>
+        <p class="pick-empty" hidden></p>
       </div>
       <a class="btn-text" href="#/exercises/new" data-new-exercise>${icon.plus}New exercise</a>`
     : `<p class="sheet-text">Your exercise library is empty. Add an exercise first, then come back to this workout.</p>
@@ -332,15 +355,26 @@ function taskSheet({ step, exercises, defaults, workoutId }) {
       const readReps = wireStepper(form, 'reps', 1, 9999);
       const byId = new Map(exercises.map((e) => [e.id, e]));
 
-      wireChips(form, filter, () => {
+      let query = '';
+      const applyFilter = () => {
         let visible = 0;
         form.querySelectorAll('.pick').forEach((p) => {
-          const show = hasAllTags(byId.get(p.dataset.ex), filter);
+          const ex = byId.get(p.dataset.ex);
+          const show = hasAllTags(ex, filter) && matchesSearch(ex.name, query);
           p.hidden = !show;
           if (show) visible++;
         });
-        form.querySelector('.pick-empty').hidden = visible > 0;
-      });
+        const empty = form.querySelector('.pick-empty');
+        empty.hidden = visible > 0;
+        empty.textContent = noMatchText(query, filter.size);
+      };
+      if (exercises.length) {
+        wireChips(form, filter, applyFilter);
+        wireSearch(form, (value) => {
+          query = value;
+          applyFilter();
+        });
+      }
 
       form.querySelectorAll('input[name="exercise"]').forEach((r) =>
         r.addEventListener('change', () => {

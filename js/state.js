@@ -4,4 +4,6 @@ export const nav = {
   returnTo: null,
   // Tags selected in the exercise list filter (kept while moving around the app).
   listFilter: new Set(),
+  // Search text in the exercise list (kept the same way).
+  listQuery: '',
 };

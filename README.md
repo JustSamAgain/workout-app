@@ -2,7 +2,7 @@
 
 A small installable web app (PWA) to build workouts from your own exercises and run them with a timer.
 
-- **Exercises**: name, photo (from your phone), description and tags (muscle groups or your own). Tap tags to filter.
+- **Exercises**: name, photo (from your phone), description and tags (muscle groups or your own). Search by name and tap tags to filter.
 - **Workouts**: as many as you like, each an ordered list of steps
   - exercise for a time (e.g. Plank, 45 s)
   - exercise for a number of reps (e.g. Squats, 15 reps)
@@ -52,6 +52,14 @@ Important on iPhone: the home-screen app has its own storage, separate from Safa
 ## Tags
 
 Each exercise can have tags: the built-in muscle groups (Chest, Back, Shoulders, Biceps, Triceps, Core, Glutes, Quads, Hamstrings, Calves, Full body, Cardio) and your own (**+ Own tag**). Tap tags above the exercise list, or in the "Add exercise" sheet of a workout, to filter. With several tags selected, only exercises that have **all** of them are shown. Only tags that some exercise uses appear in the filter.
+
+## Search
+
+The exercise list and the "Add exercise" sheet of a workout have a search box. It looks at the name only, ignores upper/lower case and accents ("ruck" finds "Rückenstrecker"), and every word must match ("push up" finds "Push-ups"). Search and tags work together. In the list, the search and tag filter stay as they are while you open an exercise and come back.
+
+## Duplicating a workout
+
+At the bottom of a workout, **Duplicate workout** asks for a name and creates a separate copy with the same steps. Changing the copy never changes the original, and both can be shared side by side.
 
 ## Repeat blocks
 

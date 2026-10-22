@@ -1,6 +1,6 @@
 import { repo } from './db.js';
-import { esc, exerciseImageUrl, thumb, resizeImage, countLabel } from './utils.js';
-import { confirmDialog, promptDialog } from './ui.js';
+import { esc, exerciseImageUrl, thumb, resizeImage, countLabel, matchesSearch } from './utils.js';
+import { confirmDialog, promptDialog, searchField, wireSearch } from './ui.js';
 import { icon } from './icons.js';
 import { nav } from './state.js';
 import { usedTags, availableTags, normalizeTags, hasAllTags, filterChips, wireChips, MAX_TAG_LENGTH } from './tags.js';
@@ -44,6 +44,7 @@ export async function viewExercises(view, match, ctx) {
       <h1>Exercises</h1>
       <a class="btn btn-primary btn-sm" href="#/exercises/new">${icon.plus}New</a>
     </header>
+    ${searchField(nav.listQuery)}
     ${tags.length ? `<div class="chip-scroll" role="group" aria-label="Filter by tag">${filterChips(tags, selected)}</div>` : ''}
     <div class="filter-status" id="filterStatus" hidden>
       <span id="filterCount" role="status"></span>
@@ -51,13 +52,13 @@ export async function viewExercises(view, match, ctx) {
     </div>
     <ul class="list" id="exerciseList"></ul>
     <div class="empty" id="noMatch" hidden>
-      <p>No exercise has all of these tags.</p>
+      <p id="noMatchText"></p>
     </div>`;
 
   const list = view.querySelector('#exerciseList');
 
   function drawList() {
-    const shown = exercises.filter((e) => hasAllTags(e, selected));
+    const shown = exercises.filter((e) => hasAllTags(e, selected) && matchesSearch(e.name, nav.listQuery));
     list.innerHTML = shown
       .map((e) => `<li>
         <a class="ex-row" href="#/exercises/${e.id}">
@@ -70,14 +71,22 @@ export async function viewExercises(view, match, ctx) {
         </a>
       </li>`)
       .join('');
-    view.querySelector('#filterStatus').hidden = !selected.size;
+    const filtering = selected.size > 0 || nav.listQuery.trim() !== '';
+    view.querySelector('#filterStatus').hidden = !filtering;
     view.querySelector('#filterCount').textContent = `${shown.length} of ${countLabel(exercises.length, 'exercise', 'exercises')}`;
     view.querySelector('#noMatch').hidden = shown.length > 0;
+    view.querySelector('#noMatchText').textContent = noMatchText(nav.listQuery, selected.size);
   }
 
+  const search = wireSearch(view, (value) => {
+    nav.listQuery = value;
+    drawList();
+  });
   wireChips(view, selected, drawList);
   view.querySelector('#clearFilter').addEventListener('click', () => {
     selected.clear();
+    nav.listQuery = '';
+    search.reset();
     view.querySelectorAll('[data-tag]').forEach((c) => {
       c.classList.remove('is-on');
       c.setAttribute('aria-pressed', 'false');
@@ -85,6 +94,13 @@ export async function viewExercises(view, match, ctx) {
     drawList();
   });
   drawList();
+}
+
+export function noMatchText(query, tagCount) {
+  const q = query.trim();
+  if (q && tagCount) return `No exercise with these tags matches \u201c${q}\u201d.`;
+  if (q) return `No exercise matches \u201c${q}\u201d.`;
+  return 'No exercise has all of these tags.';
 }
 
 // ---------- Exercise form ----------

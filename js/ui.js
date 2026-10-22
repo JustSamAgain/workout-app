@@ -1,4 +1,5 @@
 import { esc } from './utils.js';
+import { icon } from './icons.js';
 
 // Opens a bottom sheet. `onMount(dialog, done)` wires it up; calling done(value) closes it
 // and resolves the returned promise with that value (null when dismissed).
@@ -91,4 +92,41 @@ export function stepper(name, value, min, max, label) {
     <input type="number" inputmode="numeric" name="${name}" min="${min}" max="${max}" value="${value}" aria-label="${esc(label)}">
     <button type="button" data-step-for="${name}" data-step="1" aria-label="More ${esc(label)}">+</button>
   </div>`;
+}
+
+// Search box. `onChange(value)` runs on every keystroke and when cleared.
+export function searchField(value = '', label = 'Search exercises') {
+  return `<label class="search">
+    <span class="visually-hidden">${esc(label)}</span>
+    ${icon.search}
+    <input type="search" name="q" value="${esc(value)}" placeholder="Search by name" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+    <button type="button" class="search-clear" aria-label="Clear search" ${value ? '' : 'hidden'}>${icon.close}</button>
+  </label>`;
+}
+
+export function wireSearch(root, onChange) {
+  const input = root.querySelector('.search input');
+  const clear = root.querySelector('.search-clear');
+  const changed = () => {
+    clear.hidden = !input.value;
+    onChange(input.value);
+  };
+  input.addEventListener('input', changed);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // inside a form this would submit it
+      input.blur(); // closes the phone keyboard
+    }
+  });
+  clear.addEventListener('click', () => {
+    input.value = '';
+    changed();
+    input.focus();
+  });
+  return {
+    reset() {
+      input.value = '';
+      clear.hidden = true;
+    },
+  };
 }

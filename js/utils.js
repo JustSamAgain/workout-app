@@ -82,6 +82,17 @@ export function workoutStats(workout, exerciseIds) {
   return { tasks, seconds, repTasks, summary };
 }
 
+// Lowercase without accents, so "uebung", "Übung" and "ubung" behave sensibly.
+const searchKey = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// True when every word of the query appears somewhere in the name ("push up" finds "Push-ups").
+export function matchesSearch(name, query) {
+  const words = searchKey(query).split(/[\s-]+/).filter(Boolean);
+  if (!words.length) return true;
+  const target = searchKey(name);
+  return words.every((w) => target.includes(w));
+}
+
 export function countLabel(n, one, many) {
   return n === 1 ? `1 ${one}` : `${n} ${many}`;
 }
