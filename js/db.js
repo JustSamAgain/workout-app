@@ -4,7 +4,7 @@
 // The rest of the app only talks to `repo` and never touches IndexedDB directly.
 
 const DB_NAME = 'workout-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // 2 added the 'meta' store
 
 let dbPromise = null;
 
@@ -16,8 +16,14 @@ function openDb() {
         const db = req.result;
         if (!db.objectStoreNames.contains('exercises')) db.createObjectStore('exercises', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('workouts')) db.createObjectStore('workouts', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // A newer version of the app opened the database in another tab: let it upgrade.
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
     });
   }
@@ -60,6 +66,11 @@ function stamp(record) {
   return { ...record, id: record.id || newId(), createdAt: record.createdAt || now, updatedAt: now };
 }
 
+// Remembers when anything was last added, changed, deleted or imported (for the backup reminder).
+function markChanged() {
+  return run('meta', 'readwrite', (s) => s.put({ key: 'lastChangeAt', value: new Date().toISOString() })).catch(() => {});
+}
+
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
 const usesExercise = (steps, id) =>
@@ -95,6 +106,7 @@ export const repo = {
     const record = stamp(exercise);
     await run('exercises', 'readwrite', (s) => s.put(record));
     requestPersistence();
+    await markChanged();
     return record;
   },
 
@@ -121,7 +133,7 @@ export const repo = {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
-    });
+    }).then(markChanged);
   },
 
   async listWorkouts() {
@@ -137,11 +149,13 @@ export const repo = {
     const record = stamp(workout);
     await run('workouts', 'readwrite', (s) => s.put(record));
     requestPersistence();
+    await markChanged();
     return record;
   },
 
-  deleteWorkout(id) {
-    return run('workouts', 'readwrite', (s) => s.delete(id));
+  async deleteWorkout(id) {
+    await run('workouts', 'readwrite', (s) => s.delete(id));
+    await markChanged();
   },
 
   // Writes records exactly as given (keeping their ids and timestamps), in one transaction.
@@ -159,5 +173,16 @@ export const repo = {
       tx.onabort = () => reject(tx.error);
     });
     requestPersistence();
+    await markChanged();
+  },
+
+  // Small app settings and bookkeeping: { key, value }.
+  async getMeta(key) {
+    const row = await run('meta', 'readonly', (s) => s.get(key));
+    return row?.value ?? null;
+  },
+
+  setMeta(key, value) {
+    return run('meta', 'readwrite', (s) => s.put({ key, value }));
   },
 };

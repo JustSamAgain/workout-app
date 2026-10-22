@@ -960,3 +960,22 @@ button:disabled.btn { opacity: 0.4; cursor: default; }
   font-size: 2rem;
   line-height: 1;
 }
+
+/* ---------- Backup ---------- */
+
+.backup-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 16px 18px 18px;
+  border-radius: 18px;
+  background: var(--cobalt-tint);
+}
+.backup-banner-title { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; line-height: 1; }
+.backup-banner p { margin: 0; max-width: 42ch; }
+.backup-banner .btn-row { margin-top: 4px; }
+.backup-banner .btn-sm { padding: 0 18px 0 14px; }
+.backup-status { margin: 0; font-weight: 700; }
+.backup-status.is-due { color: var(--danger); }
+.sheet-body .notice { margin: 0; }

@@ -4,6 +4,7 @@ import { openSheet, confirmDialog } from './ui.js';
 import { icon } from './icons.js';
 import { buildExport, readImport } from './transfer.js';
 import { usedTags, hasAllTags, filterChips, wireChips } from './tags.js';
+import { backupStatus, recordBackup, daysAgo } from './backup.js';
 
 function saveFile(file) {
   const url = URL.createObjectURL(file);
@@ -17,11 +18,15 @@ function saveFile(file) {
 }
 
 // Opens the phone's share menu. Must be called directly from a tap.
+// Returns 'shared', 'saved' (share failed, file downloaded instead) or 'cancelled'.
 async function shareFile(file, title) {
   try {
     await navigator.share({ files: [file], title });
+    return 'shared';
   } catch (err) {
-    if (err.name !== 'AbortError') saveFile(file);
+    if (err.name === 'AbortError') return 'cancelled';
+    saveFile(file);
+    return 'saved';
   }
 }
 
@@ -37,14 +42,19 @@ function contentsLabel({ exerciseCount, workoutCount, photoCount }) {
 }
 
 // Sheet for sharing exercises and workouts (workouts bring the exercises they use).
-// `name` becomes the file name. The file is built when the sheet opens, so the Share
-// button can open the share menu right on the tap.
-export function shareItemSheet({ name, title = `Share ${name}`, exerciseIds = [], workoutIds = [] }) {
+// `name` becomes the file name. With `all`, everything is included and a successful
+// share or save counts as a backup. The file is built when the sheet opens, so the
+// Share button can open the share menu right on the tap.
+export function shareItemSheet({ name, title = `Share ${name}`, exerciseIds = [], workoutIds = [], all = false }) {
+  const hint = all
+    ? 'Save the file somewhere other than this phone, for example in Files, iCloud Drive or Google Drive, or send it to yourself.'
+    : 'Send the file to a friend. They open the Share tab in their app and choose Import.';
   return openSheet(
     `<div class="sheet-body">
       <h2 class="sheet-title">${esc(title)}</h2>
       <p class="sheet-text" data-info>Preparing file…</p>
-      <p class="sheet-text">Send the file to a friend. They open the Share tab in their app and choose Import.</p>
+      <p class="sheet-text">${hint}</p>
+      <p class="notice" data-done role="status" hidden>Backup saved.</p>
       <div class="sheet-stack">
         <button type="button" class="btn btn-primary btn-block" data-share hidden>${icon.share}Share file</button>
         <button type="button" class="btn btn-secondary btn-block" data-save disabled>${icon.download}Save file</button>
@@ -57,12 +67,20 @@ export function shareItemSheet({ name, title = `Share ${name}`, exerciseIds = []
       const shareBtn = dlg.querySelector('[data-share]');
       const saveBtn = dlg.querySelector('[data-save]');
       try {
-        const result = await buildExport({ name, exerciseIds, workoutIds });
+        const result = await buildExport({ name, exerciseIds, workoutIds, all });
         info.textContent = `${contentsLabel(result)}, ${formatSize(result.file.size)}`;
         shareBtn.hidden = !canShareFile(result.file);
         saveBtn.disabled = false;
-        shareBtn.addEventListener('click', () => shareFile(result.file, name));
-        saveBtn.addEventListener('click', () => saveFile(result.file));
+        const finished = async (outcome) => {
+          if (!all || outcome === 'cancelled') return;
+          await recordBackup();
+          dlg.querySelector('[data-done]').hidden = false;
+        };
+        shareBtn.addEventListener('click', async () => finished(await shareFile(result.file, name)));
+        saveBtn.addEventListener('click', () => {
+          saveFile(result.file);
+          finished('saved');
+        });
       } catch (err) {
         info.textContent = `The file could not be created: ${err.message}`;
       }
@@ -76,14 +94,32 @@ export function shareButton(label) {
 
 // ---------- Share tab: export & import ----------
 
-export async function viewShare(view) {
+export function backupSheet() {
+  const date = new Date().toISOString().slice(0, 10);
+  return shareItemSheet({ name: `workouts-backup-${date}`, title: 'Back up everything', all: true });
+}
+
+export function lastBackupText(status) {
+  return status.lastBackupAt ? `Last backup: ${daysAgo(status.daysSince)}` : 'No backup yet';
+}
+
+export async function viewShare(view, match, ctx) {
+  const status = await backupStatus();
+  if (ctx.stale()) return;
   view.innerHTML = `
     <header class="page-head"><h1>Share</h1></header>
 
+    ${status.hasData ? `<section class="section" aria-labelledby="backupTitle">
+      <h2 class="section-title" id="backupTitle">Backup</h2>
+      <p class="section-text">Your exercises and workouts are only stored on this phone. A backup is one file with everything, photos included. Keep it somewhere else.</p>
+      <p class="row-meta backup-status${status.due ? ' is-due' : ''}" id="backupStatus">${lastBackupText(status)}</p>
+      <button class="btn btn-primary" id="backupNow">${icon.download}Back up now</button>
+    </section>` : ''}
+
     <section class="section" aria-labelledby="exportTitle">
-      <h2 class="section-title" id="exportTitle">Export</h2>
-      <p class="section-text">Pick exercises and workouts and put them, photos included, into one file to send to a friend. Select all to keep a backup.</p>
-      <a class="btn btn-primary" href="#/share/select">${icon.share}Choose what to share</a>
+      <h2 class="section-title" id="exportTitle">Send to a friend</h2>
+      <p class="section-text">Pick exercises and workouts and put them, photos included, into one file to send to a friend.</p>
+      <a class="btn btn-secondary" href="#/share/select">${icon.share}Choose what to share</a>
     </section>
 
     <section class="section" aria-labelledby="importTitle">
@@ -95,6 +131,15 @@ export async function viewShare(view) {
       </label>
       <p class="notice" id="importNotice" role="status" hidden></p>
     </section>`;
+
+  view.querySelector('#backupNow')?.addEventListener('click', async () => {
+    await backupSheet();
+    if (ctx.stale()) return;
+    const fresh = await backupStatus();
+    const el = view.querySelector('#backupStatus');
+    el.textContent = lastBackupText(fresh);
+    el.classList.toggle('is-due', fresh.due);
+  });
 
   const notice = view.querySelector('#importNotice');
   const importLabel = view.querySelector('#importLabel');
@@ -333,6 +378,10 @@ export async function viewShareSelect(view, match, ctx) {
       : !pickedWorkouts.size && pickedExercises.size === 1
         ? exById.get([...pickedExercises][0]).name
         : null;
+    if (everythingPicked()) {
+      backupSheet();
+      return;
+    }
     shareItemSheet({
       name: single ?? `workouts-${date}`,
       title: single ? `Share ${single}` : 'Share selection',

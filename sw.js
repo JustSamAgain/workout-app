@@ -1,7 +1,7 @@
 // Service worker: makes the app work offline (e.g. in a gym without signal).
 // After changing any app file, bump VERSION so phones pick up the new files.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const APP_CACHE = `app-${VERSION}`;
 
 const APP_FILES = [
@@ -22,6 +22,7 @@ const APP_FILES = [
   'js/share.js',
   'js/tags.js',
   'js/state.js',
+  'js/backup.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',

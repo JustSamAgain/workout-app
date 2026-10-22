@@ -47,19 +47,19 @@ function collectExerciseIds(steps, into) {
 }
 
 // Without a selection: everything. With { exerciseIds, workoutIds, name }: only those,
-// plus every exercise the selected workouts use.
+// plus every exercise the selected workouts use. With { all: true, name }: everything, named.
 export async function buildExport(selection = null) {
   let [exercises, workouts] = await Promise.all([repo.listExercises(), repo.listWorkouts()]);
   const date = new Date().toISOString().slice(0, 10);
   let fileName = `workouts-${date}.json`;
 
-  if (selection) {
+  if (selection) fileName = `${slug(selection.name ?? 'export')}.json`;
+  if (selection && !selection.all) {
     const wanted = new Set(selection.workoutIds ?? []);
     workouts = workouts.filter((w) => wanted.has(w.id));
     const needed = new Set(selection.exerciseIds ?? []);
     workouts.forEach((w) => collectExerciseIds(w.steps, needed));
     exercises = exercises.filter((e) => needed.has(e.id));
-    fileName = `${slug(selection.name ?? 'export')}.json`;
   }
 
   const data = {

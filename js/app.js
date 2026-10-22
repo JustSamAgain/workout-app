@@ -7,7 +7,8 @@ import { nav } from './state.js';
 import { viewPlayer } from './player.js';
 import { viewWorkoutEditor } from './editor.js';
 import { viewExercises, viewExerciseForm } from './exercises.js';
-import { viewShare, viewShareSelect } from './share.js';
+import { viewShare, viewShareSelect, backupSheet } from './share.js';
+import { backupStatus, snoozeBackup, daysAgo } from './backup.js';
 
 const view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
@@ -75,7 +76,7 @@ route();
 // ---------- Workouts list ----------
 
 async function viewWorkouts(view, match, ctx) {
-  const [workouts, exercises] = await Promise.all([repo.listWorkouts(), repo.listExercises()]);
+  const [workouts, exercises, backup] = await Promise.all([repo.listWorkouts(), repo.listExercises(), backupStatus()]);
   if (ctx.stale()) return;
   const exById = new Map(exercises.map((e) => [e.id, e]));
 
@@ -109,7 +110,25 @@ async function viewWorkouts(view, match, ctx) {
       <h1>Workouts</h1>
       ${workouts.length ? `<button class="btn btn-primary btn-sm" data-new-workout>${icon.plus}New</button>` : ''}
     </header>
+    ${backup.due ? `<section class="backup-banner" aria-labelledby="backupBannerTitle">
+      <h2 class="backup-banner-title" id="backupBannerTitle">${backup.lastBackupAt ? `Your last backup was ${daysAgo(backup.daysSince)}` : 'Back up your workouts'}</h2>
+      <p>Your exercises and workouts are only stored on this phone. Save a copy somewhere else so you don\u2019t lose them.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" id="bannerBackup">${icon.download}Back up now</button>
+        <button class="btn btn-secondary btn-sm" id="bannerLater">Later</button>
+      </div>
+    </section>` : ''}
     ${workouts.length ? `<ul class="list">${list}</ul>` : empty}`;
+
+  const banner = view.querySelector('.backup-banner');
+  view.querySelector('#bannerLater')?.addEventListener('click', async () => {
+    await snoozeBackup();
+    banner.remove();
+  });
+  view.querySelector('#bannerBackup')?.addEventListener('click', async () => {
+    await backupSheet();
+    if (!(await backupStatus()).due) banner?.remove();
+  });
 
   view.querySelectorAll('[data-new-workout]').forEach((b) => b.addEventListener('click', createWorkout));
 }

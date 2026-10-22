@@ -10,7 +10,8 @@ A small installable web app (PWA) to build workouts from your own exercises and 
   - rest of any length
   - repeat block: a group of exercises and rests done several rounds in a row
 - **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**. Shows the round inside repeat blocks.
-- **Share**: send a single exercise or workout to a friend, pick several to send together, or select all as a backup.
+- **Share**: send a single exercise or workout to a friend, or pick several to send together.
+- **Backup**: one tap saves everything to a file; the app reminds you when the last backup is old.
 - Works offline. All data stays on the device.
 
 No build step, no dependencies. Plain HTML, CSS and JavaScript.
@@ -79,6 +80,16 @@ In a workout, **+ Repeat** adds a block with a number of rounds. Add exercises a
 
 A rest at the end of a block is the rest between rounds: it is skipped after the last round. Add a separate rest after the block if you want one there.
 
+## Backup reminder
+
+Your data only lives on this phone, so the app reminds you to keep a copy elsewhere.
+
+- **Back up now** (Share tab, or in the reminder) creates one file with everything, photos included. Save it somewhere other than the phone: Files / iCloud Drive / Google Drive, or send it to yourself. Selecting everything on "Choose what to share" counts as a backup too. Sharing only some items does not.
+- A backup counts when the file was saved, or when the share menu reports success. The app can't check where the file ended up.
+- The reminder appears at the top of the Workouts tab when there was **no backup yet** and your first data is more than **7 days** old, or when the last backup is more than **30 days** old **and** something changed since then (added, edited, deleted or imported). **Later** hides it for 7 days.
+- The Share tab always shows when the last backup was.
+- There are no push notifications; the reminder only shows when you open the app.
+
 ## Sharing and backups
 
 To share **one exercise or workout**, open it and tap **Share** at the top. A shared workout includes all exercises it uses, with photos.
@@ -108,6 +119,7 @@ js/editor.js          workout editor (steps, repeat blocks, step sheets)
 js/exercises.js       exercise library and exercise form
 js/tags.js            built-in tags, tag filter
 js/share.js           Share tab, choosing what to share, share sheet
+js/backup.js          backup reminder rules
 js/player.js          workout mode (timer, rounds, wake lock)
 js/transfer.js        export and import (file format, checks, merging)
 js/state.js           small shared navigation state
@@ -131,6 +143,8 @@ Step      { id, type: 'time', exerciseId, seconds, weight?, sides? }
 ```
 
 IDs are UUIDs, so records can later be merged with server data without collisions.
+
+A small `meta` store keeps bookkeeping values: `lastBackupAt`, `lastChangeAt`, `backupSnoozedUntil`.
 
 ### Export file
 
