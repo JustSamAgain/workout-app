@@ -9,7 +9,7 @@ A small installable web app (PWA) to build workouts from your own exercises and 
   - rest of any length
   - repeat block: a group of exercises and rests done several rounds in a row
 - **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**. Shows the round inside repeat blocks.
-- **Share**: send a single exercise or workout to a friend, or export everything (photos included) as a backup.
+- **Share**: send a single exercise or workout to a friend, pick several to send together, or select all as a backup.
 - Works offline. All data stays on the device.
 
 No build step, no dependencies. Plain HTML, CSS and JavaScript.
@@ -65,7 +65,8 @@ To share **one exercise or workout**, open it and tap **Share** at the top. A sh
 
 On the **Share** tab:
 
-- **Export** puts all exercises and workouts, with photos, into one `.json` file. On phones, **Share file** opens the share menu (WhatsApp, Mail, Files …). **Save file** downloads it.
+- **Choose what to share** lists all workouts and exercises with checkboxes. A selected workout brings along the exercises it uses (shown as "Included with a workout"). Tap tags to filter the exercises, then **Select these** to pick all shown ones at once. **Select all** exports everything, which is also your backup.
+- **Share selection** puts everything picked, with photos, into one `.json` file. On phones, **Share file** opens the share menu (WhatsApp, Mail, Files …). **Save file** downloads it.
 - **Import** adds the contents of such a file. Nothing is ever deleted. Exercises and workouts that already exist (same id) are only replaced when the file has a newer version, so importing the same file twice is safe.
 - Two different exercises with the same name (e.g. your "Push-ups" and a friend's "Push-ups") stay separate.
 
@@ -86,7 +87,7 @@ js/app.js             router and workout list
 js/editor.js          workout editor (steps, repeat blocks, step sheets)
 js/exercises.js       exercise library and exercise form
 js/tags.js            built-in tags, tag filter
-js/share.js           Share tab, sharing single items
+js/share.js           Share tab, choosing what to share, share sheet
 js/player.js          workout mode (timer, rounds, wake lock)
 js/transfer.js        export and import (file format, checks, merging)
 js/state.js           small shared navigation state

@@ -779,3 +779,43 @@ button:disabled.btn { opacity: 0.4; cursor: default; }
   background: rgba(255, 255, 255, 0.2);
   font-weight: 700;
 }
+
+/* ---------- Choose what to share ---------- */
+
+.select-title { margin: 4px 0 20px; }
+.pick-section { margin-bottom: 28px; }
+.pick-section > .row-meta { margin: 2px 0 10px; }
+.pick-section-title { margin: 0 0 6px; font-family: var(--font-display); font-weight: 800; font-size: 1.75rem; line-height: 1; }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 14px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.check-row:has(input:checked) { border-color: var(--cobalt-ink); }
+.check-row:has(input:focus-visible) { outline: 3px solid var(--cobalt-ink); outline-offset: 2px; }
+.check-box {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  color: transparent;
+}
+.check-box .i { width: 18px; height: 18px; stroke-width: 3; }
+.check-row input:checked + .check-box { border-color: var(--cobalt); background: var(--cobalt); color: #fff; }
+.included-note { display: none; }
+.check-row.is-included, .check-row.is-included:has(input) { cursor: default; border-color: transparent; }
+.check-row.is-included .check-box { opacity: 0.45; }
+.check-row.is-included .included-note { display: block; }
+.dock-tall { padding-top: 32px; background: linear-gradient(to top, var(--paper) 82%, transparent); }
+.dock-spacer { height: 48px; }
+.dock-inner { max-width: 608px; margin: 0 auto; }
+.dock-note { margin: 0 0 8px; text-align: center; font-weight: 700; color: var(--muted); }

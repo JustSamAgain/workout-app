@@ -7,7 +7,7 @@ import { nav } from './state.js';
 import { viewPlayer } from './player.js';
 import { viewWorkoutEditor } from './editor.js';
 import { viewExercises, viewExerciseForm } from './exercises.js';
-import { viewShare } from './share.js';
+import { viewShare, viewShareSelect } from './share.js';
 
 const view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
@@ -22,6 +22,7 @@ const routes = [
   [/^#\/exercises\/new$/, viewExerciseForm, null],
   [/^#\/exercises\/([\w-]+)$/, viewExerciseForm, null],
   [/^#\/share$/, viewShare, 'share'],
+  [/^#\/share\/select$/, viewShareSelect, null],
 ];
 
 let cleanup = null;
