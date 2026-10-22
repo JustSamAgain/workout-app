@@ -48,13 +48,13 @@ export async function confirmDialog({ title, message = '', confirm = 'OK', cance
   return result === true;
 }
 
-export function promptDialog({ title, label, value = '', placeholder = '', confirm = 'Save' }) {
+export function promptDialog({ title, label, value = '', placeholder = '', confirm = 'Save', maxLength = 60 }) {
   return openSheet(
     `<form class="sheet-body">
       <h2 class="sheet-title">${esc(title)}</h2>
       <label class="field">
         <span class="field-label">${esc(label)}</span>
-        <input name="value" value="${esc(value)}" placeholder="${esc(placeholder)}" maxlength="60" autocomplete="off" enterkeyhint="done" autofocus>
+        <input name="value" value="${esc(value)}" placeholder="${esc(placeholder)}" maxlength="${maxLength}"autocomplete="off" enterkeyhint="done" autofocus>
       </label>
       <div class="sheet-actions">
         <span class="spacer"></span>
@@ -71,4 +71,24 @@ export function promptDialog({ title, label, value = '', placeholder = '', confi
       dlg.querySelector('[data-cancel]').addEventListener('click', () => done(null));
     }
   );
+}
+
+// Wires a −/+ number stepper: buttons with data-step="-1|1" next to an input named `name`.
+export function wireStepper(root, name, min, max) {
+  const input = root.querySelector(`input[name="${name}"]`);
+  root.querySelectorAll(`[data-step-for="${name}"]`).forEach((b) =>
+    b.addEventListener('click', () => {
+      const next = (Math.round(Number(input.value)) || 0) + Number(b.dataset.step);
+      input.value = Math.min(max, Math.max(min, next));
+    })
+  );
+  return () => Math.round(Number(input.value));
+}
+
+export function stepper(name, value, min, max, label) {
+  return `<div class="stepper">
+    <button type="button" data-step-for="${name}" data-step="-1" aria-label="Fewer ${esc(label)}">−</button>
+    <input type="number" inputmode="numeric" name="${name}" min="${min}" max="${max}" value="${value}" aria-label="${esc(label)}">
+    <button type="button" data-step-for="${name}" data-step="1" aria-label="More ${esc(label)}">+</button>
+  </div>`;
 }

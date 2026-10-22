@@ -5,7 +5,7 @@
 // if the phone stutters. The next step starts exactly at the previous endTime.
 
 import { repo } from './db.js';
-import { esc, formatClock, stepTarget, exerciseImageUrl, thumb } from './utils.js';
+import { esc, formatClock, stepTarget, exerciseImageUrl, thumb, expandSteps } from './utils.js';
 import { sounds, unlockAudio, isAudioUnlocked } from './audio.js';
 import { confirmDialog } from './ui.js';
 import { icon } from './icons.js';
@@ -18,7 +18,10 @@ export async function viewPlayer(view, match, ctx) {
   if (ctx.stale()) return;
 
   const exById = new Map(exercises.map((e) => [e.id, e]));
-  const steps = workout ? workout.steps.filter((s) => s.type === 'rest' || exById.has(s.exerciseId)) : [];
+  // Repeat blocks are unrolled here, so the player just walks through a flat list.
+  const plays = workout ? expandSteps(workout.steps, new Set(exById.keys())) : [];
+  const steps = plays.map((p) => p.step);
+  const rounds = plays.map((p) => p.round); // { n, of } inside a repeat block, else null
   const taskTotal = steps.filter((s) => s.type !== 'rest').length;
 
   if (!workout || !taskTotal) {
@@ -55,7 +58,11 @@ export async function viewPlayer(view, match, ctx) {
   let wakeLock = null;
 
   const current = () => (index < 0 ? { type: 'ready', seconds: READY_SECONDS } : steps[index]);
-  const nextTaskFrom = (from) => steps.slice(Math.max(0, from)).find((s) => s.type !== 'rest') ?? null;
+  const nextTaskFrom = (from) => {
+    for (let i = Math.max(0, from); i < steps.length; i++) if (steps[i].type !== 'rest') return i;
+    return -1;
+  };
+  const roundLabel = (r) => (r ? `Round ${r.n} of ${r.of}` : '');
   const remaining = () => (paused ? remainingAtPause : endTime - Date.now());
 
   // ----- screen wake lock -----
@@ -199,10 +206,12 @@ export async function viewPlayer(view, match, ctx) {
     el.animate([{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
   }
 
-  function nextCard(step) {
+  function nextCard(i) {
+    const step = steps[i];
     const ex = exById.get(step.exerciseId);
+    const label = rounds[i] ? `Next, round ${rounds[i].n} of ${rounds[i].of}` : 'Next';
     return `<div class="p-next">
-      <p class="p-next-label">Next</p>
+      <p class="p-next-label">${label}</p>
       <div class="p-next-row">
         ${thumb(ex, 'md')}
         <span>
@@ -258,6 +267,7 @@ export async function viewPlayer(view, match, ctx) {
       const url = exerciseImageUrl(ex);
       main = `
         ${url ? `<img class="p-image" src="${url}" alt="">` : ''}
+        ${rounds[index] ? `<p class="p-round">${roundLabel(rounds[index])}</p>` : ''}
         <h1 class="p-name">${esc(ex.name)}</h1>
         ${step.type === 'reps'
           ? `<div class="p-clock p-reps">${step.reps}<span>reps</span></div>`
@@ -268,7 +278,7 @@ export async function viewPlayer(view, match, ctx) {
       main = `
         <p class="p-phase">${phase === 'ready' ? 'Get ready' : 'Rest'}</p>
         <div class="p-clock" id="clock"></div>
-        ${next ? nextCard(next) : '<p class="p-next-label">Last rest, then you are done</p>'}`;
+        ${next >= 0 ? nextCard(next) : '<p class="p-next-label">Last rest, then you are done</p>'}`;
     }
 
     const controls = step.type === 'reps'

@@ -95,7 +95,8 @@ img { display: block; max-width: 100%; }
   margin: 0;
 }
 .page-head h1 { font-size: 3rem; }
-.page-head--sub { margin: 0; }
+.page-head--sub { margin: 0; align-items: center; }
+.head-action { align-self: center; }
 .back {
   display: inline-flex;
   align-items: center;
@@ -291,8 +292,9 @@ img { display: block; max-width: 100%; }
 }
 .step-move { display: flex; }
 
-.add-row { display: flex; gap: 8px; margin: 18px 0 20px 32px; }
-.add-row .btn { flex: 1; max-width: 180px; }
+.add-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 18px 0 20px; max-width: 480px; }
+.add-row .btn { min-width: 0; padding: 0 8px; gap: 4px; font-size: 0.95rem; }
+.add-row .btn .i { width: 18px; height: 18px; }
 
 .dock {
   position: fixed;
@@ -708,3 +710,72 @@ label.btn:focus-within { outline: 3px solid var(--cobalt-ink); outline-offset: 2
   max-width: 40ch;
 }
 .notice-error { background: var(--cobalt-tint); color: var(--danger); }
+
+/* ---------- Repeat blocks ---------- */
+
+.block {
+  padding: 4px 6px 12px;
+  border-radius: 20px;
+  background: var(--cobalt-tint);
+}
+.block-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.block-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--cobalt-ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.block-title .i { width: 22px; height: 22px; }
+.block-steps { margin-top: 2px; }
+.block-hint { margin: 2px 10px 0; }
+.add-row-block { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 10px 0 0 32px; max-width: 320px; }
+
+/* ---------- Tags ---------- */
+
+.tag-chip.is-on { border-color: var(--cobalt); background: var(--cobalt); color: #fff; }
+.chip-add { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; color: var(--cobalt-ink); }
+.chip-add .i { width: 16px; height: 16px; }
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-scroll {
+  display: flex;
+  gap: 6px;
+  margin: -4px -16px 12px;
+  padding: 2px 16px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chip-scroll::-webkit-scrollbar { display: none; }
+.chip-scroll .chip { flex: none; }
+.chip-scroll-sheet { margin: -6px -16px -4px; }
+.filter-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -4px 0 6px; color: var(--muted); font-weight: 700; }
+.row-tags { color: var(--cobalt-ink); font-size: 0.86rem; font-weight: 700; line-height: 1.3; }
+.pick-text { display: flex; flex-direction: column; min-width: 0; }
+.pick-empty { margin: 8px 6px; color: var(--muted); }
+
+/* ---------- Sheet extras ---------- */
+
+.sheet-stack { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.sheet-close { align-self: center; }
+.sheet-extra { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.rounds-field { display: flex; align-items: center; gap: 12px; font-weight: 700; color: var(--muted); }
+.rounds-field .stepper { flex: 1; max-width: 260px; }
+button:disabled.btn { opacity: 0.4; cursor: default; }
+
+/* ---------- Player: rounds ---------- */
+
+.p-round {
+  margin: 4px 0 -6px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+}

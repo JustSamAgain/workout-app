@@ -2,13 +2,14 @@
 
 A small installable web app (PWA) to build workouts from your own exercises and run them with a timer.
 
-- **Exercises**: name, photo (from your phone) and description
+- **Exercises**: name, photo (from your phone), description and tags (muscle groups or your own). Tap tags to filter.
 - **Workouts**: as many as you like, each an ordered list of steps
   - exercise for a time (e.g. Plank, 45 s)
   - exercise for a number of reps (e.g. Squats, 15 reps)
   - rest of any length
-- **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**.
-- **Share**: export everything (photos included) into one file and import files from friends.
+  - repeat block: a group of exercises and rests done several rounds in a row
+- **Workout mode**: runs through the steps with a timer, beeps for the last 3 seconds and at every change, keeps the screen on. Rep steps wait until you tap **Done**. Shows the round inside repeat blocks.
+- **Share**: send a single exercise or workout to a friend, or export everything (photos included) as a backup.
 - Works offline. All data stays on the device.
 
 No build step, no dependencies. Plain HTML, CSS and JavaScript.
@@ -48,7 +49,19 @@ Important on iPhone: the home-screen app has its own storage, separate from Safa
 - **Data lives on one device** (in the browser's IndexedDB). Deleting the app or clearing website data deletes your exercises and workouts.
 - If you switch to another app during a workout, the running step keeps counting. When you come back, the next step starts from that moment.
 
+## Tags
+
+Each exercise can have tags: the built-in muscle groups (Chest, Back, Shoulders, Biceps, Triceps, Core, Glutes, Quads, Hamstrings, Calves, Full body, Cardio) and your own (**+ Own tag**). Tap tags above the exercise list, or in the "Add exercise" sheet of a workout, to filter. With several tags selected, only exercises that have **all** of them are shown. Only tags that some exercise uses appear in the filter.
+
+## Repeat blocks
+
+In a workout, **+ Repeat** adds a block with a number of rounds. Add exercises and rests inside it with its own buttons. The arrows move steps into a block (from the step right above or below it) and out of it (from its first or last step). Tap the block title to change the rounds, ungroup it, or delete it.
+
+A rest at the end of a block is the rest between rounds: it is skipped after the last round. Add a separate rest after the block if you want one there.
+
 ## Sharing and backups
+
+To share **one exercise or workout**, open it and tap **Share** at the top. A shared workout includes all exercises it uses, with photos.
 
 On the **Share** tab:
 
@@ -60,7 +73,7 @@ Exporting regularly is also the only backup, since the data lives on one device.
 
 ## Updating the app
 
-After changing any file, open `sw.js` and raise `VERSION` (e.g. `'v1'` → `'v2'`), then upload the changed files again. Phones load the new version the next time the app is opened (sometimes it takes a second restart of the app).
+After changing any file, open `sw.js` and raise `VERSION` (e.g. `'v1'` → `'v2'`), then upload the changed and new files again (when in doubt, upload the whole folder again). Phones load the new version the next time the app is opened (sometimes it takes a second restart of the app).
 
 ## Project structure
 
@@ -69,9 +82,14 @@ index.html            page shell and tab bar
 manifest.webmanifest  app name, icons, colors for installing
 sw.js                 offline support (caches all app files)
 css/app.css           all styles, light and dark mode
-js/app.js             router, workout list, workout editor, exercise library
-js/player.js          workout mode (timer, steps, wake lock)
+js/app.js             router and workout list
+js/editor.js          workout editor (steps, repeat blocks, step sheets)
+js/exercises.js       exercise library and exercise form
+js/tags.js            built-in tags, tag filter
+js/share.js           Share tab, sharing single items
+js/player.js          workout mode (timer, rounds, wake lock)
 js/transfer.js        export and import (file format, checks, merging)
+js/state.js           small shared navigation state
 js/db.js              storage layer, the only file that touches the database
 js/audio.js           beeps (Web Audio API)
 js/ui.js              bottom sheets and confirm dialogs
@@ -83,11 +101,12 @@ icons/, fonts/        app icons and bundled fonts
 ### Data model
 
 ```
-Exercise  { id, name, description, image (Blob), createdAt, updatedAt }
+Exercise  { id, name, description, tags[], image (Blob), createdAt, updatedAt }
 Workout   { id, name, steps[], createdAt, updatedAt }
 Step      { id, type: 'time', exerciseId, seconds }
         | { id, type: 'reps', exerciseId, reps }
         | { id, type: 'rest', seconds }
+        | { id, type: 'repeat', rounds, steps[] }    one level only, no repeat inside a repeat
 ```
 
 IDs are UUIDs, so records can later be merged with server data without collisions.
@@ -97,14 +116,16 @@ IDs are UUIDs, so records can later be merged with server data without collision
 ```
 {
   "format": "workout-timer",
-  "version": 1,
-  "exportedAt": "2026-10-20T18:00:00.000Z",
+  "version": 2,
+  "exportedAt": "2026-10-21T18:00:00.000Z",
   "exercises": [ { ...exercise, "image": "data:image/jpeg;base64,..." } ],
   "workouts":  [ ...workouts ]
 }
 ```
 
 Photos are embedded as base64, so one file contains everything. Imported photos are re-encoded, and invalid steps or entries are skipped.
+
+Version 2 added tags and repeat blocks. Version 1 files still import. An older app refuses version 2 files with a message to update the app.
 
 ## Extending later
 

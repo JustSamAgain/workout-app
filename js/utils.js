@@ -30,16 +30,44 @@ export function stepTarget(step) {
   return step.type === 'reps' ? `${step.reps} reps` : formatDuration(step.seconds);
 }
 
+// All exercise and rest steps of a workout, including those inside repeat blocks (not unrolled).
+export function allSteps(steps) {
+  return steps.flatMap((s) => (s.type === 'repeat' ? s.steps : [s]));
+}
+
+// The exact sequence the player runs. Repeat blocks are unrolled; in the last round,
+// rests at the end of the block are skipped. Steps whose exercise was deleted are left out.
+export function expandSteps(steps, exerciseIds) {
+  const usable = (s) => s.type === 'rest' || exerciseIds.has(s.exerciseId);
+  const out = [];
+  for (const s of steps) {
+    if (s.type !== 'repeat') {
+      if (usable(s)) out.push({ step: s, round: null });
+      continue;
+    }
+    const kids = s.steps.filter(usable);
+    let lastTask = -1;
+    kids.forEach((k, i) => {
+      if (k.type !== 'rest') lastTask = i;
+    });
+    if (lastTask < 0) continue; // a block without exercises does nothing
+    for (let n = 1; n <= s.rounds; n++) {
+      const list = n === s.rounds ? kids.slice(0, lastTask + 1) : kids;
+      for (const k of list) out.push({ step: k, round: { n, of: s.rounds } });
+    }
+  }
+  return out;
+}
+
 export function workoutStats(workout, exerciseIds) {
   let tasks = 0;
   let seconds = 0;
   let repTasks = 0;
-  for (const s of workout.steps) {
+  for (const { step: s } of expandSteps(workout.steps, exerciseIds)) {
     if (s.type === 'rest') {
       seconds += s.seconds;
       continue;
     }
-    if (!exerciseIds.has(s.exerciseId)) continue;
     tasks++;
     if (s.type === 'time') seconds += s.seconds;
     else repTasks++;
@@ -52,6 +80,28 @@ export function workoutStats(workout, exerciseIds) {
     if (repTasks) summary += seconds ? ' plus reps' : ', reps only';
   }
   return { tasks, seconds, repTasks, summary };
+}
+
+export function countLabel(n, one, many) {
+  return n === 1 ? `1 ${one}` : `${n} ${many}`;
+}
+
+export function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// "Leg day (Ü)" -> "leg-day-u"
+export function slug(name) {
+  const s = String(name)
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+  return s || 'export';
 }
 
 // Object URLs for exercise images, cached per exercise version.

@@ -62,14 +62,23 @@ function stamp(record) {
 
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
+const usesExercise = (steps, id) =>
+  steps.some((s) => (s.type === 'repeat' ? usesExercise(s.steps, id) : s.exerciseId === id));
+
+const withoutExercise = (steps, id) =>
+  steps
+    .filter((s) => s.exerciseId !== id)
+    .map((s) => (s.type === 'repeat' ? { ...s, steps: withoutExercise(s.steps, id) } : s));
+
 /*
   Data model
 
-  Exercise: { id, name, description, image: Blob | null, createdAt, updatedAt }
+  Exercise: { id, name, description, tags: string[], image: Blob | null, createdAt, updatedAt }
   Workout:  { id, name, steps: Step[], createdAt, updatedAt }
   Step:     { id, type: 'time', exerciseId, seconds }
           | { id, type: 'reps', exerciseId, reps }
           | { id, type: 'rest', seconds }
+          | { id, type: 'repeat', rounds, steps: Step[] }   (one level only, no repeat inside repeat)
 */
 export const repo = {
   async listExercises() {
@@ -90,7 +99,7 @@ export const repo = {
 
   async countWorkoutsUsing(exerciseId) {
     const workouts = await run('workouts', 'readonly', (s) => s.getAll());
-    return workouts.filter((w) => w.steps.some((st) => st.exerciseId === exerciseId)).length;
+    return workouts.filter((w) => usesExercise(w.steps, exerciseId)).length;
   },
 
   // Deletes the exercise and removes its steps from every workout, in one transaction.
@@ -103,8 +112,8 @@ export const repo = {
       const req = workouts.getAll();
       req.onsuccess = () => {
         for (const w of req.result) {
-          if (w.steps.some((st) => st.exerciseId === id)) {
-            workouts.put({ ...w, steps: w.steps.filter((st) => st.exerciseId !== id), updatedAt: new Date().toISOString() });
+          if (usesExercise(w.steps, id)) {
+            workouts.put({ ...w, steps: withoutExercise(w.steps, id), updatedAt: new Date().toISOString() });
           }
         }
       };
